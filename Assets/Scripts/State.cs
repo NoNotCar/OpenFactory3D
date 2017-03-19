@@ -4,24 +4,31 @@ using System.Linq;
 using UnityEngine;
 
 public class State: MonoBehaviour {
-    public Dictionary<IVector3,BlockScript> blocks;
+    public Dictionary<IVector3,Block> blocks;
     public float cycle=0;
     public bool running;
     private Dictionary<BlockShape, List<Force>>[] fdict;
     private Force gforce = new Force(3, IVector3.down);
     public const int MAX_FORCE = 3;
     public GameObject rootblock;
+    public bool gen_root = true;
+    private void Awake()
+    {
+        blocks = new Dictionary<IVector3, Block>();
+    }
     private void Start()
     {
-        blocks = new Dictionary<IVector3, BlockScript>();
-        Spawn(rootblock, IVector3.zero);
+        if (gen_root)
+        {
+            Spawn(rootblock, IVector3.zero);
+        }
     }
     public bool Spawn(GameObject prefab, IVector3 pos, Quaternion rot)
     {
         if (in_world(pos))
         {
             var newb = Instantiate(prefab, pos, rot);
-            this[pos] = newb.GetComponent<BlockScript>();
+            this[pos] = newb.GetComponent<BlockScript>().block;
             return true;
         }
         return false;
@@ -29,6 +36,11 @@ public class State: MonoBehaviour {
     public bool Spawn(GameObject prefab, IVector3 pos)
     {
         return Spawn(prefab, pos, Quaternion.identity);
+    }
+    public bool Spawn(Block b)
+    {
+        this[b.pos] = b;
+        return true;
     }
     public void Dest(IVector3 pos)
     {
@@ -38,12 +50,12 @@ public class State: MonoBehaviour {
             Dest(b);
         }
     }
-    public void Dest(BlockScript block)
+    public void Dest(Block block)
     {
         if (!block.indest)
         {
             this[block.pos] = null;
-            Destroy(block.gameObject);
+            Destroy(block.bs.gameObject);
         }
     }
     public void Update()
@@ -79,12 +91,15 @@ public class State: MonoBehaviour {
         }
         else
         {
-            var nblocks = new Dictionary<IVector3,BlockScript>();
+            var nblocks = new Dictionary<IVector3,Block>();
             foreach (var b in realblocks().ToArray())
             {
                 var opos = b.original_pos;
                 nblocks[opos] = b;
-                b.transform.position = opos;
+                if (b.bs != null)
+                {
+                    b.bs.transform.position = opos;
+                }
                 b.pos = opos;
             }
             blocks = nblocks;
@@ -99,7 +114,7 @@ public class State: MonoBehaviour {
         var gshapes = new List<BlockShape>();
         foreach (var b in realblocks())
         {
-            foreach (var wp in b.weld_pos())
+            foreach (var wp in b.weld_pos(this))
             {
                 if (this[wp] != null)
                 {
@@ -164,12 +179,12 @@ public class State: MonoBehaviour {
         {
             fd[target].Add(f);
         }
-        else
+        else if (!fd.ContainsKey(target))
         {
             fd[target] = new List<Force>() { f };
         }
     }
-    public void Add_Force(BlockScript target, Force f)
+    public void Add_Force(Block target, Force f)
     {
         if (target != null)
         {
@@ -188,7 +203,7 @@ public class State: MonoBehaviour {
     {
         return true;
     }
-    public BlockScript this[IVector3 pos]
+    public Block this[IVector3 pos]
     {
         get
         {
@@ -203,7 +218,7 @@ public class State: MonoBehaviour {
             blocks[pos] = value;
         }
     }
-    public IEnumerable<BlockScript> realblocks()
+    public IEnumerable<Block> realblocks()
     {
         foreach (var b in blocks)
         {
@@ -217,7 +232,7 @@ public class State: MonoBehaviour {
     public bool can_push(BlockShape s, Force f, Dictionary<IVector3,IVector3> moves)
     {
         if (s.moved) { return false; }
-        var moving = new List<BlockScript>();
+        var moving = new List<Block>();
         var mshapes = new List<BlockShape>() { s };
         moving.AddRange(s.components);
         for (var i = 0; i < moving.Count(); i++)
@@ -253,7 +268,7 @@ public class State: MonoBehaviour {
     }
     public void push(BlockShape s, IVector3 dir)
     {
-        var moving = new List<BlockScript>();
+        var moving = new List<Block>();
         var mshapes = new List<BlockShape>() { s };
         moving.AddRange(s.components);
         for (var i = 0; i < moving.Count(); i++)

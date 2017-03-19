@@ -7,7 +7,7 @@ public class BuildOn : MonoBehaviour {
     public Vector2 tstart;
     private Vector2 rlast = Vector2.zero;
     private float angle = 0;
-    public float height = 7;
+    private float yangle = 0.5f;
     public float distance = 7;
     private float tstartt;
     private State state;
@@ -43,7 +43,7 @@ public class BuildOn : MonoBehaviour {
         {
             var dbs = hit.collider.gameObject.GetComponent<BlockScript>();
             if (dbs!=null){
-                state.Dest(dbs);
+                state.Dest(dbs.block);
             }
         }
     }
@@ -95,6 +95,7 @@ public class BuildOn : MonoBehaviour {
                     {
                         case TouchPhase.Moved:
                             angle += ctouch.deltaPosition.x * ANG_MULT * Screen.dpi;
+                            yangle = Mathf.Clamp(yangle- ctouch.deltaPosition.y * ANG_MULT * Screen.dpi, -1, 1);
                             break;
                         case TouchPhase.Ended:
                             ignore_once = true;
@@ -124,13 +125,17 @@ public class BuildOn : MonoBehaviour {
             }else if (Input.GetMouseButton(1))
             {
                 angle += ((Vector2)Input.mousePosition - rlast).x * ANG_MULT * Screen.dpi;
+                angle %= Mathf.PI * 2;
+                yangle -= ((Vector2)Input.mousePosition - rlast).y * ANG_MULT * Screen.dpi;
+                yangle = Mathf.Clamp(yangle, -1, 1);
                 rlast = Input.mousePosition;
             }
         }
     }
     public void re_loc(IVector3 pos)
     {
-        transform.position = pos + new Vector3(distance*Mathf.Sin(angle), height, distance * Mathf.Cos(angle));
+        var zxd = distance * Mathf.Cos(yangle);
+        transform.position = pos + new Vector3(zxd*Mathf.Sin(angle), distance*Mathf.Sin(yangle), zxd * Mathf.Cos(angle));
         transform.LookAt(pos);
     }
     public void on_single_touch(Vector2 end_pos)
