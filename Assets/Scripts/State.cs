@@ -4,18 +4,17 @@ using System.Linq;
 using UnityEngine;
 
 public class State: MonoBehaviour {
-    public Vector3 size;
-    public BlockScript[,,] blocks;
+    public Dictionary<IVector3,BlockScript> blocks;
     public float cycle=0;
     public bool running;
     private Dictionary<BlockShape, List<Force>>[] fdict;
     private Force gforce = new Force(3, IVector3.down);
     public const int MAX_FORCE = 3;
+    public GameObject rootblock;
     private void Start()
     {
-        blocks = new BlockScript[(int)size.x, (int)size.y, (int)size.z];
-        var floor = GameObject.Find("Floor");
-        floor.transform.position = new Vector3(size.x / 2-0.5f, -0.5f, size.y / 2 - 0.5f);
+        blocks = new Dictionary<IVector3, BlockScript>();
+        Spawn(rootblock, IVector3.zero);
     }
     public bool Spawn(GameObject prefab, IVector3 pos, Quaternion rot)
     {
@@ -36,14 +35,16 @@ public class State: MonoBehaviour {
         var b = this[pos];
         if (b != null)
         {
-            Destroy(b.gameObject);
-            this[pos] = null;
+            Dest(b);
         }
     }
     public void Dest(BlockScript block)
     {
-        this[block.pos] = null;
-        Destroy(block.gameObject);
+        if (!block.indest)
+        {
+            this[block.pos] = null;
+            Destroy(block.gameObject);
+        }
     }
     public void Update()
     {
@@ -78,11 +79,11 @@ public class State: MonoBehaviour {
         }
         else
         {
-            var nblocks = new BlockScript[(int)size.x, (int)size.y, (int)size.z];
+            var nblocks = new Dictionary<IVector3,BlockScript>();
             foreach (var b in realblocks().ToArray())
             {
                 var opos = b.original_pos;
-                nblocks[opos.x, opos.y, opos.z] = b;
+                nblocks[opos] = b;
                 b.transform.position = opos;
                 b.pos = opos;
             }
@@ -94,7 +95,30 @@ public class State: MonoBehaviour {
     {
         cycle = 0;
         fdict = new Dictionary<BlockShape, List<Force>>[MAX_FORCE+1];
+        var weldpos = new List<IVector3>();
         var gshapes = new List<BlockShape>();
+        foreach (var b in realblocks())
+        {
+            foreach (var wp in b.weld_pos())
+            {
+                if (this[wp] != null)
+                {
+                    foreach (var p in weldpos)
+                    {
+                        if (p.adjacent(wp))
+                        {
+                            var b1 = this[p];
+                            var b2 = this[wp];
+                            if (b1.shape != b2.shape)
+                            {
+                                b1.shape.Join(b2.shape);
+                            }
+                        }
+                    }
+                    weldpos.Add(wp);
+                }
+            }
+        }
         foreach (var b in realblocks())
         {
             b.shape.moved = false;
@@ -162,26 +186,30 @@ public class State: MonoBehaviour {
     }
     public bool in_world(Vector3 pos)
     {
-        return 0 <= pos.x && pos.x < size.x && 0 <= pos.y && pos.y < size.y && 0 <= pos.z && pos.z < size.z;
+        return true;
     }
     public BlockScript this[IVector3 pos]
     {
         get
         {
-            return blocks[pos.x, pos.y, pos.z];
+            if (blocks.ContainsKey(pos))
+            {
+                return blocks[pos];
+            }
+            return null;
         }
         set
         {
-            blocks[pos.x, pos.y, pos.z] = value;
+            blocks[pos] = value;
         }
     }
     public IEnumerable<BlockScript> realblocks()
     {
         foreach (var b in blocks)
         {
-            if (b != null)
+            if (b.Value != null)
             {
-                yield return b;
+                yield return b.Value;
             }
         }
 

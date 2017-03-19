@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class BlockScript : MonoBehaviour {
@@ -11,12 +12,14 @@ public class BlockScript : MonoBehaviour {
     private IVector3 opos;
     public IVector3 original_pos;
     public IVector3 pos;
+    public bool indest = false;
     private State engine;
     public void Start()
     {
         engine = GameObject.FindGameObjectWithTag("Engine").GetComponent<State>();
         pos = new IVector3(transform.position);
         shape = new BlockShape(this);
+        no_weld = (from d in no_weld select (transform.rotation * d).Rounded()).ToList();
     }
     public void OnStart(State s)
     {
@@ -32,10 +35,6 @@ public class BlockScript : MonoBehaviour {
                     {
                         tblock.shape.Join(shape);
                     }
-                }
-                else if (pos.y==0)
-                {
-                    shape.stat = true;
                 }
             }
         }
@@ -71,6 +70,7 @@ public class BlockScript : MonoBehaviour {
         shape.moved = true;
     }
     public virtual void Add_Forces(State s) { }
+    public virtual IVector3[] weld_pos() { return new IVector3[0]; }
 }
 public class BlockShape: object
 {
@@ -80,6 +80,7 @@ public class BlockShape: object
     public BlockShape(BlockScript un)
     {
         components = new List<BlockScript>() { un };
+        stat = un.indest;
     }
     public BlockShape(List<BlockScript> comps)
     {

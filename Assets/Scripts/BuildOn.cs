@@ -5,24 +5,23 @@ using UnityEngine;
 public class BuildOn : MonoBehaviour {
     public GameObject buildblock;
     public Vector2 tstart;
+    private Vector2 rlast = Vector2.zero;
     private float angle = 0;
     public float height = 7;
     public float distance = 7;
     private float tstartt;
     private State state;
-    const float MIN_MULTI_TIME = 1;
+    const float LONG_PRESS_TIME = 0.5f;
     const float MIN_DIST = 50;
-    const float MENU_DIST = 10;
     const float ANG_MULT = 0.00005f;
-    private bool menuing = false;
-    public GameObject BlockSelect;
-    public GameObject Target;
+    public IVector3 Target = IVector3.zero;
     public bool ignore_once;
+    private bool editor;
     // Use this for initialization
     void Start () {
         state = GameObject.FindGameObjectWithTag("Engine").GetComponent<State>();
-        BlockSelect.SetActive(false);
-	}
+        editor = Application.platform == RuntimePlatform.WindowsEditor;
+    }
 	public void BuildOne (Vector2 pos, Quaternion rot) {
         RaycastHit hit;
         var cam = GetComponent<Camera>();
@@ -48,70 +47,118 @@ public class BuildOn : MonoBehaviour {
             }
         }
     }
-    public void Update()
+    public void Change_Cam(Vector2 pos)
     {
-        re_loc(Target);
-        if (Input.touchCount > 0)
+        RaycastHit hit;
+        var cam = GetComponent<Camera>();
+        Ray ray = cam.ScreenPointToRay(pos);
+
+        if (Physics.Raycast(ray, out hit))
         {
-            if (Input.touchCount == 1 && !state.running)
+            var dbs = hit.collider.gameObject.GetComponent<BlockScript>();
+            if (dbs != null)
             {
-                var ctouch = Input.GetTouch(0);
-                switch (ctouch.phase)
-                {
-                    case TouchPhase.Began:
-                        tstart = ctouch.position;
-                        tstartt = Time.time;
-                        menuing = tstart.x < MENU_DIST || tstart.x > Screen.width - MENU_DIST;
-                        break;
-                    case TouchPhase.Ended:
-                        if (menuing)
-                        {
-                            BlockSelect.SetActive(true);
-                        }
-                        if (ignore_once)
-                        {
-                            ignore_once = false;
-                            return;
-                        }
-                        if (!BlockSelect.activeInHierarchy)
-                        {
-                            var dir = ctouch.position - tstart;
-                            if (dir.magnitude > MIN_DIST)
-                            {
-                                var rot = Quaternion.FromToRotation(Vector2.right, dir);
-                                var eu = rot.eulerAngles;
-                                eu.x = 0;
-                                eu.y = -Mathf.Round((eu.z - Mathf.Rad2Deg*angle+180) / 90) * 90;
-                                eu.z = 0;
-                                rot.eulerAngles = eu;
-                                BuildOne(tstart, rot);
-                            }
-                            else
-                            {
-                                Erase(tstart);
-                            }
-                        }
-                        break;
-                }
-            }
-            else if (Input.touchCount == 2)
-            {
-                var ctouch = Input.GetTouch(1);
-                switch (ctouch.phase)
-                {
-                    case TouchPhase.Moved:
-                        angle += ctouch.deltaPosition.x * ANG_MULT * Screen.dpi;
-                        break;
-                    case TouchPhase.Ended:
-                        ignore_once = true;
-                        break;
-                }
+                Target = new IVector3(dbs.transform.position);
             }
         }
     }
-    public void re_loc(GameObject floor)
+    public void Update()
     {
-        transform.position = floor.transform.position + new Vector3(distance*Mathf.Sin(angle), height, distance * Mathf.Cos(angle));
-        transform.LookAt(floor.transform);
+        re_loc(Target);
+        if (!editor)
+        {
+            if (Input.touchCount > 0)
+            {
+                if (Input.touchCount == 1)
+                {
+                    var ctouch = Input.GetTouch(0);
+                    switch (ctouch.phase)
+                    {
+                        case TouchPhase.Began:
+                            tstart = ctouch.position;
+                            tstartt = Time.time;
+                            break;
+                        case TouchPhase.Ended:
+                            if (ignore_once)
+                            {
+                                ignore_once = false;
+                                return;
+                            }
+                            on_single_touch(ctouch.position);
+                            break;
+                    }
+                }
+                else if (Input.touchCount == 2)
+                {
+                    var ctouch = Input.GetTouch(1);
+                    switch (ctouch.phase)
+                    {
+                        case TouchPhase.Moved:
+                            angle += ctouch.deltaPosition.x * ANG_MULT * Screen.dpi;
+                            break;
+                        case TouchPhase.Ended:
+                            ignore_once = true;
+                            break;
+                    }
+                }
+            }
+        }else
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                tstart = Input.mousePosition;
+                tstartt = Time.time;
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                if (ignore_once)
+                {
+                    ignore_once = false;
+                    return;
+                }
+                on_single_touch(Input.mousePosition);
+            }
+            if (Input.GetMouseButtonDown(1))
+            {
+                rlast = Input.mousePosition;
+            }else if (Input.GetMouseButton(1))
+            {
+                angle += ((Vector2)Input.mousePosition - rlast).x * ANG_MULT * Screen.dpi;
+                rlast = Input.mousePosition;
+            }
+        }
+    }
+    public void re_loc(IVector3 pos)
+    {
+        transform.position = pos + new Vector3(distance*Mathf.Sin(angle), height, distance * Mathf.Cos(angle));
+        transform.LookAt(pos);
+    }
+    public void on_single_touch(Vector2 end_pos)
+    {
+        var dir = end_pos - tstart;
+        if (dir.magnitude > MIN_DIST)
+        {
+            if (!state.running)
+            {
+                var rot = Quaternion.FromToRotation(Vector2.right, dir);
+                var eu = rot.eulerAngles;
+                eu.x = 0;
+                eu.y = -Mathf.Round((eu.z - Mathf.Rad2Deg * angle + 180) / 90) * 90;
+                eu.z = 0;
+                rot.eulerAngles = eu;
+                BuildOne(tstart, rot);
+            }
+        }
+        else
+        {
+            if (Time.time - tstartt > LONG_PRESS_TIME/2)
+            {
+                Change_Cam(end_pos);
+            }
+            else if (!state.running)
+            {
+                Erase(end_pos);
+            }
+        }
     }
 }

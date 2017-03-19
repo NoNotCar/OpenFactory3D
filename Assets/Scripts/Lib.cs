@@ -7,6 +7,12 @@ public class IVector3
     public int x = 0;
     public int y = 0;
     public int z = 0;
+    public float magnitude { get
+        {
+
+            return ((Vector3)this).magnitude;
+        }
+    }
     public IVector3() { }
     public IVector3(Vector3 v)
     {
@@ -21,6 +27,10 @@ public class IVector3
         this.y = y;
         this.z = z;
     }
+    public bool adjacent(IVector3 other)
+    {
+        return (this - other).magnitude == 1;
+    }
     public static IVector3 operator +(IVector3 i1, IVector3 i2)
     {
         return new IVector3(i1.x + i2.x, i1.y + i2.y, i1.z + i2.z);
@@ -28,6 +38,10 @@ public class IVector3
     public static IVector3 operator -(IVector3 i)
     {
         return new IVector3(-i.x, -i.y, -i.z);
+    }
+    public static IVector3 operator -(IVector3 i1, IVector3 i2)
+    {
+        return new IVector3(i1.x - i2.x, i1.y - i2.y, i1.z - i2.z);
     }
     public static implicit operator Vector3(IVector3 i)
     {
@@ -39,11 +53,11 @@ public class IVector3
     }
     public static bool operator !=(IVector3 i1, IVector3 i2)
     {
-        return i1.x != i2.x || i1.y != i2.y || i1.z != i2.z;
+        return !(i1 == i2);
     }
     public override bool Equals(object obj)
     {
-        if(obj.GetType()==typeof(IVector3)){
+        if(obj is IVector3){
             return this == (IVector3)obj;
         }
         return false;
